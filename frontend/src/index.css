@@ -1,0 +1,32 @@
+:root {
+  --ink: #1f2238;
+  --muted: #57607d;
+  --paper: #eef3ff;
+  --brand: #1e7b62;
+  --brand-soft: #d8f5e7;
+  --warning: #be3d3d;
+  --card: rgba(255, 255, 255, 0.86);
+  --stroke: rgba(31, 34, 56, 0.14);
+  --shadow: 0 24px 60px rgba(20, 37, 57, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 20%, #b6d7ff 0%, transparent 35%),
+    radial-gradient(circle at 85% 80%, #ffe9ae 0%, transparent 33%),
+    linear-gradient(135deg, #f8fbff 0%, #eef6ff 45%, #f8fffa 100%);
+  font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+}
