@@ -14,7 +14,13 @@ const envSchema = z.object({
   ACCESS_TOKEN_EXPIRES_IN: z.string().default("15m"),
   REFRESH_TOKEN_EXPIRES_IN: z.string().default("7d"),
   CORS_ORIGIN: z.string().url().or(z.literal("http://localhost:5173")),
-  COOKIE_SECURE: z.string().default("false").transform((v) => v === "true")
+  COOKIE_SECURE: z.string().default("false").transform((v) => v === "true"),
+  ENABLE_DEMO_ADMIN: z.string().default("true").transform((v) => v === "true"),
+  DEMO_ADMIN_EMAIL: z.string().email().default("demo-admin@notes.app"),
+  DEMO_ADMIN_PASSWORD: z
+    .string()
+    .min(8, "DEMO_ADMIN_PASSWORD must be at least 8 chars")
+    .default("Admin@12345!")
 });
 
 const parsed = envSchema.safeParse(process.env);

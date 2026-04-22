@@ -43,6 +43,26 @@ interface NoteMutationResponse {
   note: NoteApiRecord;
 }
 
+interface AdminUserRecord {
+  id: string;
+  email: string;
+  role: "user" | "admin";
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AdminUsersResponse {
+  count: number;
+  users: AdminUserRecord[];
+}
+
+const API_PREFIX = "/api/v1";
+const API_VERSION_LABEL = "API v1";
+const DEMO_ADMIN_CREDENTIALS = {
+  email: import.meta.env.VITE_DEMO_ADMIN_EMAIL ?? "demo-admin@notes.app",
+  password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD ?? "Admin@12345!"
+};
+
 const emptyDraft = {
   title: "",
   content: ""
@@ -60,10 +80,10 @@ const normalizeNote = (note: NoteApiRecord): NoteRecord => ({
 
 const buildNotesPath = (filter: NotesFilter): string => {
   if (filter === "all") {
-    return "/api/notes";
+    return `${API_PREFIX}/notes`;
   }
 
-  return `/api/notes?isArchived=${filter === "archived" ? "true" : "false"}`;
+  return `${API_PREFIX}/notes?isArchived=${filter === "archived" ? "true" : "false"}`;
 };
 
 const formatDate = (value: string): string => {
@@ -92,9 +112,12 @@ function App() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+  const [usersStatus, setUsersStatus] = useState("Admin tools ready.");
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
   const authEndpoint = useMemo(
-    () => (mode === "login" ? "/api/auth/login" : "/api/auth/register"),
+    () => (mode === "login" ? `${API_PREFIX}/auth/login` : `${API_PREFIX}/auth/register`),
     [mode]
   );
 
@@ -105,6 +128,7 @@ function App() {
 
   const archivedCount = notes.filter((note) => note.isArchived).length;
   const activeCount = notes.filter((note) => !note.isArchived).length;
+  const isAdmin = user?.role === "admin";
 
   const resetComposer = (): void => {
     setDraft(emptyDraft);
@@ -155,10 +179,36 @@ function App() {
     }
   };
 
+  const loadUsers = async (tokenOverride?: string): Promise<void> => {
+    const token = tokenOverride ?? accessToken;
+    if (!token || !isAdmin) {
+      setUsers([]);
+      return;
+    }
+
+    setUsersStatus("Loading users...");
+
+    try {
+      const data = await apiRequest<AdminUsersResponse>(`${API_PREFIX}/auth/users`, {
+        token
+      });
+
+      setUsers(data.users);
+      setUsersStatus(
+        data.users.length > 0
+          ? `${data.users.length} user${data.users.length === 1 ? "" : "s"} loaded`
+          : "No users found."
+      );
+    } catch (error) {
+      setUsers([]);
+      setUsersStatus(error instanceof Error ? error.message : "Could not load users");
+    }
+  };
+
   useEffect(() => {
     const initSession = async (): Promise<void> => {
       try {
-        const data = await apiRequest<AuthResponse>("/api/auth/refresh", { method: "POST" });
+        const data = await apiRequest<AuthResponse>(`${API_PREFIX}/auth/refresh`, { method: "POST" });
         applyAuthSuccess(data);
         setAuthStatus("Session restored");
       } catch {
@@ -178,6 +228,15 @@ function App() {
 
     void loadNotes();
   }, [accessToken, filter]);
+
+  useEffect(() => {
+    if (!accessToken || !isAdmin) {
+      setUsers([]);
+      return;
+    }
+
+    void loadUsers();
+  }, [accessToken, isAdmin]);
 
   const onSubmitAuth = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
@@ -221,7 +280,8 @@ function App() {
         ...(editingNoteId && selectedNote ? { isArchived: selectedNote.isArchived } : {})
       };
 
-      const path = editingNoteId ? `/api/notes/${editingNoteId}` : "/api/notes";
+      const notesBasePath = `${API_PREFIX}/notes`;
+      const path = editingNoteId ? `${notesBasePath}/${editingNoteId}` : notesBasePath;
       const method = editingNoteId ? "PATCH" : "POST";
 
       const data = await apiRequest<NoteMutationResponse>(path, {
@@ -264,7 +324,7 @@ function App() {
     }
 
     try {
-      const data = await apiRequest<NoteMutationResponse>(`/api/notes/${note.id}`, {
+      const data = await apiRequest<NoteMutationResponse>(`${API_PREFIX}/notes/${note.id}`, {
         method: "PATCH",
         token: accessToken,
         body: { isArchived: !note.isArchived }
@@ -288,7 +348,7 @@ function App() {
     }
 
     try {
-      const data = await apiRequest<{ message: string }>(`/api/notes/${note.id}`, {
+      const data = await apiRequest<{ message: string }>(`${API_PREFIX}/notes/${note.id}`, {
         method: "DELETE",
         token: accessToken
       });
@@ -310,11 +370,12 @@ function App() {
 
   const logout = async (): Promise<void> => {
     try {
-      await apiRequest<{ message: string }>("/api/auth/logout", { method: "POST" });
+      await apiRequest<{ message: string }>(`${API_PREFIX}/auth/logout`, { method: "POST" });
     } finally {
       setAccessToken(null);
       setUser(null);
       setNotes([]);
+      setUsers([]);
       setSelectedNoteId(null);
       resetComposer();
       setAuthStatus("Logged out");
@@ -322,16 +383,79 @@ function App() {
     }
   };
 
+  const updateManagedUserRole = async (
+    managedUser: AdminUserRecord,
+    role: "user" | "admin"
+  ): Promise<void> => {
+    if (!accessToken) {
+      return;
+    }
+
+    setBusyUserId(managedUser.id);
+
+    try {
+      const data = await apiRequest<{ message: string; user: AdminUserRecord }>(
+        `${API_PREFIX}/auth/users/${managedUser.id}/role`,
+        {
+          method: "PATCH",
+          token: accessToken,
+          body: { role }
+        }
+      );
+
+      setUsersStatus(data.message);
+      await loadUsers(accessToken);
+    } catch (error) {
+      setUsersStatus(error instanceof Error ? error.message : "Could not update user");
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  const deleteManagedUser = async (managedUser: AdminUserRecord): Promise<void> => {
+    if (!accessToken) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete user ${managedUser.email}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setBusyUserId(managedUser.id);
+
+    try {
+      const data = await apiRequest<{ message: string }>(`${API_PREFIX}/auth/users/${managedUser.id}`, {
+        method: "DELETE",
+        token: accessToken
+      });
+
+      setUsersStatus(data.message);
+      await loadUsers(accessToken);
+    } catch (error) {
+      setUsersStatus(error instanceof Error ? error.message : "Could not delete user");
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
   if (!user || !accessToken) {
     return (
       <main className="auth-shell">
         <section className="hero-panel">
-          <p className="eyebrow">Notes Workspace</p>
+          <div className="eyebrow-row">
+            <p className="eyebrow">Notes Workspace</p>
+            <span className="version-pill">{API_VERSION_LABEL}</span>
+          </div>
           <h1>Authenticate once, then manage notes like a real app.</h1>
           <p className="hero-copy">
             This project already has JWT auth, role-aware access, MongoDB, API versioning, and notes
             CRUD. The frontend now matches that purpose: sign up, log in, and start writing.
           </p>
+          <div className="api-paths">
+            <span>/api/v1/auth</span>
+            <span>/api/v1/notes</span>
+          </div>
 
           <div className="feature-grid">
             <article className="feature-card">
@@ -421,6 +545,32 @@ function App() {
             </button>
           </form>
 
+          <div className="demo-card">
+            <div className="demo-header">
+              <div>
+                <p className="demo-label">Demo Admin Login</p>
+                <p className="helper-text">For admin role-based access testing.</p>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setMode("login");
+                  setEmail(DEMO_ADMIN_CREDENTIALS.email);
+                  setPassword(DEMO_ADMIN_CREDENTIALS.password);
+                  setValidationErrors({});
+                  setAuthStatus("Demo admin credentials loaded.");
+                }}
+                type="button"
+              >
+                Use demo admin
+              </button>
+            </div>
+            <div className="demo-credentials">
+              <span>Email: {DEMO_ADMIN_CREDENTIALS.email}</span>
+              <span>Password: {DEMO_ADMIN_CREDENTIALS.password}</span>
+            </div>
+          </div>
+
           <p className="status-line">{authStatus}</p>
         </section>
       </main>
@@ -431,11 +581,18 @@ function App() {
     <main className="workspace-shell">
       <header className="workspace-header">
         <div>
-          <p className="eyebrow">Authenticated Workspace</p>
+          <div className="eyebrow-row">
+            <p className="eyebrow">Authenticated Workspace</p>
+            <span className="version-pill">{API_VERSION_LABEL}</span>
+          </div>
           <h1>Notes dashboard</h1>
           <p className="panel-copy">
             Create, update, archive, and delete notes. Your profile stays visible in the sidebar.
           </p>
+          <div className="api-paths">
+            <span>/api/v1/auth</span>
+            <span>/api/v1/notes</span>
+          </div>
         </div>
 
         <div className="header-actions">
@@ -598,7 +755,7 @@ function App() {
               </div>
               <div>
                 <span className="profile-label">Role</span>
-                <strong>{user.role}</strong>
+                <strong className={user.role === "admin" ? "role-pill admin" : "role-pill"}>{user.role}</strong>
               </div>
               <div>
                 <span className="profile-label">User ID</span>
@@ -625,6 +782,61 @@ function App() {
               <p className="detail-copy">Select a note to preview it here.</p>
             )}
           </section>
+
+          {isAdmin ? (
+            <section className="panel admin-panel">
+              <div className="section-heading">
+                <div>
+                  <h2>Admin users</h2>
+                  <p>Manage user roles and remove accounts for the demo.</p>
+                </div>
+                <button className="ghost-button" onClick={() => void loadUsers()} type="button">
+                  Refresh users
+                </button>
+              </div>
+
+              <p className="status-line compact">{usersStatus}</p>
+
+              <div className="users-list">
+                {users.map((managedUser) => {
+                  const isCurrentUser = managedUser.id === user.id;
+                  const isBusy = busyUserId === managedUser.id;
+                  const nextRole = managedUser.role === "admin" ? "user" : "admin";
+
+                  return (
+                    <article key={managedUser.id} className="user-card">
+                      <div className="user-summary">
+                        <strong>{managedUser.email}</strong>
+                        <span className={managedUser.role === "admin" ? "role-pill admin" : "role-pill"}>
+                          {managedUser.role}
+                        </span>
+                      </div>
+                      <p className="user-meta">Joined {formatDate(managedUser.createdAt)}</p>
+                      {isCurrentUser ? <p className="user-meta">Current demo admin account</p> : null}
+                      <div className="user-actions">
+                        <button
+                          className="ghost-button"
+                          disabled={isCurrentUser || isBusy}
+                          onClick={() => void updateManagedUserRole(managedUser, nextRole)}
+                          type="button"
+                        >
+                          {isBusy ? "Working..." : `Make ${nextRole}`}
+                        </button>
+                        <button
+                          className="danger-button"
+                          disabled={isCurrentUser || isBusy}
+                          onClick={() => void deleteManagedUser(managedUser)}
+                          type="button"
+                        >
+                          Delete user
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
         </aside>
       </section>
     </main>

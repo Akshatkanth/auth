@@ -38,6 +38,30 @@
   color: var(--muted);
 }
 
+.eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.version-pill,
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  background: rgba(22, 54, 45, 0.1);
+  color: #16362d;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.role-pill.admin {
+  background: rgba(255, 207, 116, 0.45);
+  color: #7a4b00;
+}
+
 h1,
 h2,
 h3,
@@ -65,6 +89,28 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
   margin-top: 2rem;
+}
+
+.api-paths,
+.demo-credentials {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.api-paths {
+  margin: 1rem 0 0;
+}
+
+.api-paths span,
+.demo-credentials span {
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(31, 34, 56, 0.08);
+  color: var(--muted);
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.85rem;
 }
 
 .feature-card {
@@ -178,6 +224,28 @@ textarea {
   color: var(--muted);
 }
 
+.demo-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 22px;
+  background: rgba(216, 245, 231, 0.46);
+  border: 1px solid rgba(30, 123, 98, 0.16);
+}
+
+.demo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.demo-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
 .status-line {
   font-weight: 600;
 }
@@ -199,7 +267,9 @@ textarea {
 .composer-actions,
 .header-actions,
 .note-meta,
-.detail-flags {
+.detail-flags,
+.user-actions,
+.user-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -317,6 +387,33 @@ textarea {
   margin-bottom: 0.6rem;
 }
 
+.admin-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.users-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.user-card {
+  padding: 0.9rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(31, 34, 56, 0.08);
+}
+
+.user-summary {
+  flex-wrap: wrap;
+}
+
+.user-meta {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .detail-flags {
   justify-content: flex-start;
   flex-wrap: wrap;
@@ -362,7 +459,8 @@ textarea {
   .workspace-header,
   .section-heading,
   .header-actions,
-  .composer-actions {
+  .composer-actions,
+  .demo-header {
     flex-direction: column;
     align-items: stretch;
   }

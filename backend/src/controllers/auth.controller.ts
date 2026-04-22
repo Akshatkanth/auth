@@ -29,6 +29,12 @@ const issueTokens = (userId: string, role: Role) => {
   return { accessToken, refreshToken };
 };
 
+const serializeUser = (user: { id: string; email: string; role: Role }) => ({
+  id: user.id,
+  email: user.email,
+  role: user.role
+});
+
 export const register = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body as { email: string; password: string };
 
@@ -50,7 +56,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   res.status(201).json({
     message: "Registration successful",
     accessToken,
-    user: { id: user.id, email: user.email, role: user.role }
+    user: serializeUser(user)
   });
 };
 
@@ -78,7 +84,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   res.status(200).json({
     message: "Login successful",
     accessToken,
-    user: { id: user.id, email: user.email, role: user.role }
+    user: serializeUser(user)
   });
 };
 
@@ -113,7 +119,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 
     res.status(200).json({
       accessToken,
-      user: { id: user.id, email: user.email, role: user.role }
+      user: serializeUser(user)
     });
   } catch {
     res.status(401).json({ message: "Invalid or expired refresh token" });
@@ -149,9 +155,79 @@ export const me = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  res.status(200).json({ user: { id: user.id, email: user.email, role: user.role } });
+  res.status(200).json({ user: serializeUser(user) });
 };
 
 export const adminOnly = (_req: Request, res: Response): void => {
   res.status(200).json({ message: "Admin route access granted" });
+};
+
+export const listUsers = async (_req: Request, res: Response): Promise<void> => {
+  const users = await User.find().select("email role createdAt updatedAt").sort({ createdAt: -1 });
+
+  res.status(200).json({
+    count: users.length,
+    users: users.map((user) => ({
+      ...serializeUser(user),
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }))
+  });
+};
+
+export const updateUserRole = async (req: Request, res: Response): Promise<void> => {
+  const requestingUserId = req.user?.userId;
+  const targetUserId = req.params.userId;
+  const { role } = req.body as { role: Role };
+
+  if (!requestingUserId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  if (requestingUserId === targetUserId) {
+    res.status(400).json({ message: "Admins cannot change their own role" });
+    return;
+  }
+
+  const user = await User.findById(targetUserId);
+  if (!user) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+
+  user.role = role;
+  await user.save();
+
+  res.status(200).json({
+    message: "User role updated",
+    user: {
+      ...serializeUser(user),
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }
+  });
+};
+
+export const deleteUser = async (req: Request, res: Response): Promise<void> => {
+  const requestingUserId = req.user?.userId;
+  const targetUserId = req.params.userId;
+
+  if (!requestingUserId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  if (requestingUserId === targetUserId) {
+    res.status(400).json({ message: "Admins cannot delete their own account" });
+    return;
+  }
+
+  const deletedUser = await User.findByIdAndDelete(targetUserId);
+  if (!deletedUser) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+
+  res.status(200).json({ message: "User deleted" });
 };
